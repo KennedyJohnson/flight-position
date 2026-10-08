@@ -1,12 +1,13 @@
 // Vercel serverless function: live aircraft position for the flight-delay site.
 //   GET /api/position?callsign=DAL660  -> the aircraft currently flying that callsign
 //   GET /api/position?reg=N389DN       -> that tail number, wherever it is right now
-// Data: free community ADS-B feeds (adsb.lol, then adsb.fi). No API key. Answers are cached for 15 s.
+// Data: free community ADS-B feeds (adsb.fi, then adsb.lol). No API key. Answers are cached for 15 s.
 const ALLOWED = ["https://kennedyjohnson.github.io", "http://localhost:8812", "http://localhost:8000", "http://127.0.0.1:8812"];
 const UA = "flight-live/1.0 (+https://kennedyjohnson.github.io/will-my-flight-be-delayed/)";
 const FEEDS = {
-  callsign: [(v) => `https://api.adsb.lol/v2/callsign/${v}`, (v) => `https://opendata.adsb.fi/api/v2/callsign/${v}`],
-  reg: [(v) => `https://api.adsb.lol/v2/reg/${v}`, (v) => `https://opendata.adsb.fi/api/v2/registration/${v}`],
+  // adsb.fi first: its records include the aircraft model, year and operator; adsb.lol is the fallback
+  callsign: [(v) => `https://opendata.adsb.fi/api/v2/callsign/${v}`, (v) => `https://api.adsb.lol/v2/callsign/${v}`],
+  reg: [(v) => `https://opendata.adsb.fi/api/v2/registration/${v}`, (v) => `https://api.adsb.lol/v2/reg/${v}`],
 };
 
 async function lookup(kind, value, fetchFn = fetch) {
@@ -27,6 +28,9 @@ async function lookup(kind, value, fetchFn = fetch) {
           alt_ft: typeof a.alt_baro === "number" ? a.alt_baro : a.alt_baro === "ground" ? 0 : null,
           speed_kt: typeof a.gs === "number" ? Math.round(a.gs) : null,
           callsign: String(a.flight ?? "").trim() || null, reg: a.r ?? null, type: a.t ?? null,
+          model: a.desc ?? null, year: /^\d{4}$/.test(a.year ?? "") ? Number(a.year) : null, operator: a.ownOp ?? null,
+          climb_fpm: typeof a.baro_rate === "number" ? a.baro_rate : null,
+          target_alt_ft: typeof a.nav_altitude_mcp === "number" ? a.nav_altitude_mcp : null,
           updated: Math.max(0, Math.round(a.seen_pos ?? a.seen ?? 0)),
         },
       };
